@@ -21,6 +21,7 @@ type OderProduct struct {
 	ProductID uuid.UUID `db:"product_id"`
 	Cprofile  string    `db:"customer_profile"`
 	OId       uuid.UUID `db:"order_id"`
+	Status    string    `db:"acceptance_status"`
 }
 
 type OrderProductItem struct {
@@ -48,6 +49,7 @@ type ManagePlans struct {
 	OrderID       uuid.UUID `db:"order_id"`
 	ProductID     uuid.UUID `db:"product_id"`
 	ServiceCenter bool      `db:"service_center"`
+	IsAdmin       string    `db:"is_admin"`
 }
 
 type ManagePlansItem struct {
@@ -61,6 +63,7 @@ type ManagePlansItem struct {
 	Status        *string    `db:"status"`
 	SubsPeriod    int        `db:"subscription_period"`
 	Quantity      int        `db:"quantity"`
+	IsAdmin       string     `db:"is_admin"`
 }
 
 type ManagePlansAircraft struct {
@@ -71,7 +74,7 @@ type ManagePlansAircraft struct {
 
 func main() {
 
-	db, err := sqlx.Connect("postgres", "postgres://upfsvcgdrtdyfp:281d83667710a9cd4056c4e1a58898288072b558bdbe2b27ba3627bc27fc5735@ec2-34-228-248-175.compute-1.amazonaws.com:5432/ddoudtminovuk6")
+	db, err := sqlx.Connect("postgres", "user=svq dbname=services_quotation sslmode=disable password=svq host=localhost")
 
 	if err != nil {
 		log.Fatalln(err)
@@ -104,7 +107,7 @@ func main() {
 		}
 		oproduct := OderProduct{}
 
-		products, perror := db.Queryx("SELECT id, product_id, customer_profile, order_id FROM order_products WHERE order_id = $1", order.ID)
+		products, perror := db.Queryx("SELECT id, product_id, customer_profile, order_id, acceptance_status FROM order_products WHERE order_id = $1", order.ID)
 
 		if perror != nil {
 			log.Fatalln(perror)
@@ -123,6 +126,7 @@ func main() {
 			/* ------------------------------------------------------------------- INIT SAVE PLAN -------------------------------------------------------------- */
 
 			var isServiceCenter bool
+			var isAdmin string
 
 			if oproduct.Cprofile == "easc" {
 				isServiceCenter = true
@@ -130,18 +134,25 @@ func main() {
 				isServiceCenter = false
 			}
 
+			if oproduct.Status == "Support Test" {
+				isAdmin = "yes"
+			} else {
+				isAdmin = "no"
+			}
+
 			newPlan := ManagePlans{
 				OrderID:       order.ID,
 				Ccode:         order.Ccode,
 				ProductID:     oproduct.ProductID,
 				ServiceCenter: isServiceCenter,
+				IsAdmin:       isAdmin,
 			}
 
-			queryPlans := `INSERT INTO manage_plans (customer_code, order_id, product_id, service_center) VALUES ($1, $2, $3, $4) RETURNING id`
+			queryPlans := `INSERT INTO manage_plans (customer_code, order_id, product_id, service_center, is_admin) VALUES ($1, $2, $3, $4, $5) RETURNING id`
 
 			var id uuid.UUID
 
-			mp_error := db.QueryRow(queryPlans, order.Ccode, order.ID, oproduct.ProductID, isServiceCenter).Scan(&id)
+			mp_error := db.QueryRow(queryPlans, order.Ccode, order.ID, oproduct.ProductID, isServiceCenter, isAdmin).Scan(&id)
 
 			if mp_error != nil {
 				log.Fatalln(mp_error)
@@ -190,11 +201,12 @@ func main() {
 					Status:        opitem.Status,
 					SubsPeriod:    sbsPeriod,
 					Quantity:      opitem.Quantity,
+					IsAdmin:       isAdmin,
 				}
 
-				queryItems := `INSERT INTO manage_plans_items (manage_plans_id, product_item_id, aircraft_model_id, start_date, end_date, blocking_date, status, subscription_period, quantity) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
+				queryItems := `INSERT INTO manage_plans_items (manage_plans_id, product_item_id, aircraft_model_id, start_date, end_date, blocking_date, status, subscription_period, quantity, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
 
-				imp_error := db.QueryRow(queryItems, newPlan.ID, opitem.ItemID, opitem.AircraftID, opitem.StartDate, opitem.EndDate, opitem.ExcludedIn, opitem.Status, sbsPeriod, opitem.Quantity).Scan(&id)
+				imp_error := db.QueryRow(queryItems, newPlan.ID, opitem.ItemID, opitem.AircraftID, opitem.StartDate, opitem.EndDate, opitem.ExcludedIn, opitem.Status, sbsPeriod, opitem.Quantity, isAdmin).Scan(&id)
 
 				if imp_error != nil {
 					log.Fatalln(imp_error.Error())

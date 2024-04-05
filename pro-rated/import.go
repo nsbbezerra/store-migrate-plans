@@ -15,6 +15,7 @@ type ProRated struct {
 	OrderProductID uuid.UUID `db:"order_product_id"`
 	OrderID        uuid.UUID `db:"order_id"`
 	ProductID      uuid.UUID `db:"product_id"`
+	IsAdmin        string    `db:"acceptance_status"`
 }
 
 type ProRatedItem struct {
@@ -63,6 +64,7 @@ type ManagePlansItem struct {
 	Quantity      int        `db:"quantity"`
 	ProRated      bool       `db:"pro_rated"`
 	ProRatedID    uuid.UUID  `db:"pro_rated_id"`
+	IsAdmin       string     `db:"is_admin"`
 }
 
 type ManagePlansAircraft struct {
@@ -88,7 +90,7 @@ func main() {
 
 	pro_rated := ProRated{}
 
-	pro_rateds, prerror := db.Queryx("select opr.id  as pro_rated_id, op.id as order_product_id, o.id as order_id, op.product_id from optionals_pro_rated opr join order_products op on op.id = opr.order_product_id join orders o on o.id = op.order_id")
+	pro_rateds, prerror := db.Queryx("select opr.id  as pro_rated_id, op.id as order_product_id, o.id as order_id, op.product_id, op.acceptance_status from optionals_pro_rated opr join order_products op on op.id = opr.order_product_id join orders o on o.id = op.order_id")
 
 	if prerror != nil {
 		log.Fatalln(prerror)
@@ -97,6 +99,14 @@ func main() {
 	defer pro_rateds.Close()
 
 	log.Println("Migration process init!")
+
+	var isAdmin string
+
+	if pro_rated.IsAdmin == "Support Test" {
+		isAdmin = "yes"
+	} else {
+		isAdmin = "no"
+	}
 
 	for pro_rateds.Next() {
 		err := pro_rateds.StructScan(&pro_rated)
@@ -178,11 +188,12 @@ func main() {
 					Quantity:      order_product_item.Quantity,
 					ProRated:      true,
 					ProRatedID:    pro_rated.ID,
+					IsAdmin:       isAdmin,
 				}
 
-				queryItems := `INSERT INTO manage_plans_items (manage_plans_id, product_item_id, aircraft_model_id, start_date, end_date, blocking_date, status, subscription_period, quantity, pro_rated, pro_rated_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
+				queryItems := `INSERT INTO manage_plans_items (manage_plans_id, product_item_id, aircraft_model_id, start_date, end_date, blocking_date, status, subscription_period, quantity, pro_rated, pro_rated_id, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`
 
-				imp_error := db.QueryRow(queryItems, manage_plans_id, order_product_item.ItemID, order_product_item.AircraftID, order_product_item.StartDate, order_product_item.EndDate, order_product_item.ExcludedIn, order_product_item.Status, sbsPeriod, order_product_item.Quantity, true, pro_rated.ID).Scan(&id)
+				imp_error := db.QueryRow(queryItems, manage_plans_id, order_product_item.ItemID, order_product_item.AircraftID, order_product_item.StartDate, order_product_item.EndDate, order_product_item.ExcludedIn, order_product_item.Status, sbsPeriod, order_product_item.Quantity, true, pro_rated.ID, isAdmin).Scan(&id)
 
 				if imp_error != nil {
 					log.Fatalln(imp_error.Error())
