@@ -74,7 +74,7 @@ type ManagePlansAircraft struct {
 
 func main() {
 
-	db, err := sqlx.Connect("postgres", "user=svq dbname=services_quotation sslmode=disable password=svq host=localhost")
+	db, err := sqlx.Connect("postgres", "host=localhost port=5432 user=svq password=svq dbname=services_quotation sslmode=disable")
 
 	if err != nil {
 		log.Fatalln(err)
